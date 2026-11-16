@@ -50,3 +50,27 @@ def save_model(model, path="classifier.joblib"):
 def load_model(path="classifier.joblib"):
     """Charge un modèle sauvegardé avec joblib."""
     return joblib.load(path)
+
+
+FEATURES = [
+    "CreditScore",
+    "Gender",
+    "Age",
+    "Tenure",
+    "Balance",
+    "NumOfProducts",
+    "HasCrCard",
+    "IsActiveMember",
+    "EstimatedSalary",
+]
+
+
+def predict(model, features):
+    """Predit le depart d'un client : retourne (classe 0/1, probabilite de depart).
+
+    `features` est une liste de 9 valeurs, dans l'ordre de FEATURES.
+    """
+    X = pd.DataFrame([features], columns=FEATURES)
+    prediction = int(model.predict(X)[0])
+    probability = float(model.predict_proba(X)[0][1])
+    return prediction, probability

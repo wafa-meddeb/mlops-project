@@ -62,3 +62,16 @@ def test_save_load(tmp_path):
     save_model(model, path)
     loaded = load_model(path)
     assert (loaded.predict(X_test) == model.predict(X_test)).all()
+
+
+def test_predict(tmp_path):
+    from model_pipeline import predict
+
+    csv = tmp_path / "data.csv"
+    make_csv(csv)
+    X_train, X_test, y_train, y_test = prepare_data(str(csv))
+    model = train_model(X_train, y_train, n_estimators=10)
+    sample = [850, 0, 43, 2, 125510.82, 1, 1, 1, 79084.1]
+    prediction, probability = predict(model, sample)
+    assert prediction in (0, 1)
+    assert 0 <= probability <= 1

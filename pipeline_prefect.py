@@ -15,7 +15,7 @@ from model_pipeline import (
     train_model,
 )
 
-FILES = ["model_pipeline.py", "main.py", "pipeline_prefect.py"]
+FILES = ["model_pipeline.py", "main.py", "pipeline_prefect.py", "app.py"]
 DATA_PATH = "Churn_Modelling.csv"
 MODEL_PATH = "classifier.joblib"
 
@@ -105,6 +105,12 @@ def evaluate_task(model, X_test, y_test):
     return evaluate_model(model, X_test, y_test)
 
 
+@task(name="start_api")
+def start_api():
+    """Lance l'API FastAPI (bloquant, arret avec Ctrl+C)."""
+    run_cmd(["uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8000"])
+
+
 # ---------- Flows ----------
 @flow(name="code")
 def code_flow():
@@ -139,11 +145,17 @@ def all_flow():
     evaluate_task(model, X_test, y_test)
 
 
+@flow(name="api")
+def api_flow():
+    start_api()
+
+
 FLOWS = {
     "all": all_flow,
     "train": train_flow,
     "evaluate": evaluate_flow,
     "code": code_flow,
+    "api": api_flow,
 }
 
 if __name__ == "__main__":
