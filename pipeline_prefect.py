@@ -31,6 +31,28 @@ def run_cmd(cmd):
         raise RuntimeError(f"Echec de la commande : {' '.join(cmd)}")
 
 
+# ---------- Task : recuperation du projet (Git distant) ----------
+@task(name="fetch_project")
+def fetch_project():
+    """Recupere la derniere version du projet depuis le depot distant."""
+    remotes = subprocess.run(
+        ["git", "remote"], capture_output=True, text=True, check=False
+    ).stdout.split()
+    if "origin" not in remotes:
+        print("Pas de depot distant 'origin' : etape ignoree.")
+        return
+    result = subprocess.run(
+        ["git", "pull", "--ff-only", "origin", "main"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    print(result.stdout)
+    print(result.stderr)
+    if result.returncode != 0:
+        raise RuntimeError("Echec de git pull")
+
+
 # ---------- Tasks : code ----------
 @task(name="install_dependencies")
 def install_dependencies():
@@ -109,6 +131,7 @@ def evaluate_flow():
 
 @flow(name="all")
 def all_flow():
+    fetch_project()
     code_flow()
     X_train, X_test, y_train, y_test = prepare_task()
     model = train_task(X_train, y_train)
