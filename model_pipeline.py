@@ -1,8 +1,9 @@
 """Pipeline ML modulaire - Churn Modelling (Atelier 2)."""
 
+import time
+from datetime import datetime, timezone
+
 import joblib
-import mlflow
-import mlflow.sklearn
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
@@ -91,23 +92,67 @@ EXPERIMENT_NAME = "churn_prediction"
 
 def setup_mlflow(tracking_uri=MLFLOW_TRACKING_URI):
     """Configure MLflow : backend SQLite local et experience du projet."""
+    import mlflow
+
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(EXPERIMENT_NAME)
 
 
+ELASTIC_URL = "http://localhost:9200"
+ELASTIC_INDEX = "mlflow-metrics"
+
+
+def send_to_elasticsearch(doc, url=ELASTIC_URL, index=ELASTIC_INDEX):
+    """Envoie un document dans Elasticsearch (sans bloquer le pipeline si KO)."""
+    try:
+        from elasticsearch import Elasticsearch
+
+        Elasticsearch(url).index(index=index, document=doc)
+        print(f"Run envoye a Elasticsearch (index {index})")
+    except Exception as exc:
+        print(f"Elasticsearch indisponible, envoi ignore : {exc}")
+
+
 def log_experiment(model, X_test, y_test, run_name="random_forest"):
-    """Enregistre hyperparametres, metriques et modele dans MLflow."""
+    """Enregistre params, metriques et modele dans MLflow puis Elasticsearch."""
+    import mlflow
+    import mlflow.sklearn
+
     setup_mlflow()
     y_pred = model.predict(X_test)
-    with mlflow.start_run(run_name=run_name):
-        mlflow.log_param("n_estimators", model.n_estimators)
-        mlflow.log_param("random_state", model.random_state)
-        mlflow.log_metric("accuracy", accuracy_score(y_test, y_pred))
-        mlflow.log_metric("precision", precision_score(y_test, y_pred))
-        mlflow.log_metric("recall", recall_score(y_test, y_pred))
-        mlflow.log_metric("f1", f1_score(y_test, y_pred))
+    params = {
+        "n_estimators": int(model.n_estimators),
+        "random_state": int(model.random_state),
+    }
+    metrics = {
+        "accuracy": float(accuracy_score(y_test, y_pred)),
+        "precision": float(precision_score(y_test, y_pred)),
+        "recall": float(recall_score(y_test, y_pred)),
+        "f1": float(f1_score(y_test, y_pred)),
+    }
+    start = time.time()
+    with mlflow.start_run(run_name=run_name) as run:
+        mlflow.log_params(params)
+        mlflow.log_metrics(metrics)
         mlflow.sklearn.log_model(
             model,
             name="model",
             skops_trusted_types=["sklearn.tree._tree.Tree"],
         )
+        run_id = run.info.run_id
+        experiment_id = run.info.experiment_id
+
+    doc = {
+        "@timestamp": datetime.now(timezone.utc).isoformat(),
+        "run_id": run_id,
+        "run_name": run_name,
+        "experiment_id": experiment_id,
+        "experiment_name": EXPERIMENT_NAME,
+        "status": "FINISHED",
+        "duration_seconds": round(time.time() - start, 3),
+        "params": params,
+        "metrics": metrics,
+    }
+    doc.update({f"param_{k}": str(v) for k, v in params.items()})
+    doc.update({f"metric_{k}": v for k, v in metrics.items()})
+    send_to_elasticsearch(doc)

@@ -22,6 +22,7 @@ def main():
     )
     parser.add_argument("--data", default="Churn_Modelling.csv")
     parser.add_argument("--model", default="classifier.joblib")
+    parser.add_argument("--n-estimators", type=int, default=100)
     args = parser.parse_args()
 
     X_train, X_test, y_train, y_test = prepare_data(args.data)
@@ -30,7 +31,7 @@ def main():
         print(f"Train : {X_train.shape} | Test : {X_test.shape}")
 
     elif args.step == "train":
-        model = train_model(X_train, y_train)
+        model = train_model(X_train, y_train, args.n_estimators)
         save_model(model, args.model)
         log_experiment(model, X_test, y_test)
 
@@ -39,7 +40,7 @@ def main():
         evaluate_model(model, X_test, y_test)
 
     else:  # all
-        model = train_model(X_train, y_train)
+        model = train_model(X_train, y_train, args.n_estimators)
         evaluate_model(model, X_test, y_test)
         save_model(model, args.model)
         log_experiment(model, X_test, y_test)

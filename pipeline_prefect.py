@@ -19,6 +19,10 @@ from model_pipeline import (
 FILES = ["model_pipeline.py", "main.py", "pipeline_prefect.py", "app.py"]
 DATA_PATH = "Churn_Modelling.csv"
 MODEL_PATH = "classifier.joblib"
+IMAGE_NAME = "wafa_meddeb_5ia_mlops"
+DOCKERHUB_USER = "wafameddeb"
+REMOTE_IMAGE = f"{DOCKERHUB_USER}/{IMAGE_NAME}:latest"
+CONTAINER_NAME = "churn-api"
 
 
 def run_cmd(cmd):
@@ -52,6 +56,17 @@ def fetch_project():
     print(result.stderr)
     if result.returncode != 0:
         raise RuntimeError("Echec de git pull")
+
+
+def run_docker(args, strict=True):
+    """Execute une commande docker et leve une erreur si echec (si strict)."""
+    cmd = ["docker"] + args
+    print("$", " ".join(cmd))
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    print(result.stdout)
+    print(result.stderr)
+    if strict and result.returncode != 0:
+        raise RuntimeError(f"Echec de la commande : {' '.join(cmd)}")
 
 
 # ---------- Tasks : code ----------
@@ -134,6 +149,23 @@ def start_mlflow():
     )
 
 
+@task(name="docker_build")
+def docker_build():
+    run_docker(["build", "-t", IMAGE_NAME, "."])
+
+
+@task(name="docker_push")
+def docker_push():
+    run_docker(["tag", IMAGE_NAME, REMOTE_IMAGE])
+    run_docker(["push", REMOTE_IMAGE])
+
+
+@task(name="docker_run")
+def docker_run():
+    run_docker(["rm", "-f", CONTAINER_NAME], strict=False)
+    run_docker(["run", "-d", "--name", CONTAINER_NAME, "-p", "8000:8000", IMAGE_NAME])
+
+
 # ---------- Flows ----------
 @flow(name="code")
 def code_flow():
@@ -175,6 +207,13 @@ def mlflow_flow():
     start_mlflow()
 
 
+@flow(name="cd")
+def cd_flow():
+    docker_build()
+    docker_push()
+    docker_run()
+
+
 @flow(name="api")
 def api_flow():
     start_api()
@@ -187,6 +226,7 @@ FLOWS = {
     "code": code_flow,
     "api": api_flow,
     "mlflow": mlflow_flow,
+    "cd": cd_flow,
 }
 
 if __name__ == "__main__":
