@@ -10,6 +10,7 @@ from prefect.cache_policies import NO_CACHE
 from model_pipeline import (
     evaluate_model,
     load_model,
+    log_experiment,
     prepare_data,
     save_model,
     train_model,
@@ -111,6 +112,28 @@ def start_api():
     run_cmd(["uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8000"])
 
 
+@task(name="track_experiment", cache_policy=NO_CACHE)
+def track_task(model, X_test, y_test):
+    log_experiment(model, X_test, y_test)
+
+
+@task(name="start_mlflow")
+def start_mlflow():
+    """Lance l'interface MLflow (bloquant, arret avec Ctrl+C)."""
+    run_cmd(
+        [
+            "mlflow",
+            "ui",
+            "--backend-store-uri",
+            "sqlite:///mlflow.db",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "5000",
+        ]
+    )
+
+
 # ---------- Flows ----------
 @flow(name="code")
 def code_flow():
@@ -126,6 +149,7 @@ def train_flow():
     X_train, X_test, y_train, y_test = prepare_task()
     model = train_task(X_train, y_train)
     save_task(model)
+    track_task(model, X_test, y_test)
 
 
 @flow(name="evaluate")
@@ -143,6 +167,12 @@ def all_flow():
     model = train_task(X_train, y_train)
     save_task(model)
     evaluate_task(model, X_test, y_test)
+    track_task(model, X_test, y_test)
+
+
+@flow(name="mlflow")
+def mlflow_flow():
+    start_mlflow()
 
 
 @flow(name="api")
@@ -156,6 +186,7 @@ FLOWS = {
     "evaluate": evaluate_flow,
     "code": code_flow,
     "api": api_flow,
+    "mlflow": mlflow_flow,
 }
 
 if __name__ == "__main__":

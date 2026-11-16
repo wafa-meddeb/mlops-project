@@ -1,10 +1,11 @@
-"""Point d'entrée CLI : python main.py --step {prepare,train,evaluate,all}"""
+"""Point d'entree CLI : python main.py --step {prepare,train,evaluate,all}"""
 
 import argparse
 
 from model_pipeline import (
     evaluate_model,
     load_model,
+    log_experiment,
     prepare_data,
     save_model,
     train_model,
@@ -17,7 +18,7 @@ def main():
         "--step",
         choices=["prepare", "train", "evaluate", "all"],
         default="all",
-        help="Étape à exécuter",
+        help="Etape a executer",
     )
     parser.add_argument("--data", default="Churn_Modelling.csv")
     parser.add_argument("--model", default="classifier.joblib")
@@ -31,6 +32,7 @@ def main():
     elif args.step == "train":
         model = train_model(X_train, y_train)
         save_model(model, args.model)
+        log_experiment(model, X_test, y_test)
 
     elif args.step == "evaluate":
         model = load_model(args.model)
@@ -40,6 +42,7 @@ def main():
         model = train_model(X_train, y_train)
         evaluate_model(model, X_test, y_test)
         save_model(model, args.model)
+        log_experiment(model, X_test, y_test)
 
 
 if __name__ == "__main__":

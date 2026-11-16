@@ -1,9 +1,18 @@
 """Pipeline ML modulaire - Churn Modelling (Atelier 2)."""
 
 import joblib
+import mlflow
+import mlflow.sklearn
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+)
 from sklearn.model_selection import train_test_split
 
 DROP_COLS = ["RowNumber", "CustomerId", "Surname", "Geography"]
@@ -74,3 +83,31 @@ def predict(model, features):
     prediction = int(model.predict(X)[0])
     probability = float(model.predict_proba(X)[0][1])
     return prediction, probability
+
+
+MLFLOW_TRACKING_URI = "sqlite:///mlflow.db"
+EXPERIMENT_NAME = "churn_prediction"
+
+
+def setup_mlflow(tracking_uri=MLFLOW_TRACKING_URI):
+    """Configure MLflow : backend SQLite local et experience du projet."""
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment(EXPERIMENT_NAME)
+
+
+def log_experiment(model, X_test, y_test, run_name="random_forest"):
+    """Enregistre hyperparametres, metriques et modele dans MLflow."""
+    setup_mlflow()
+    y_pred = model.predict(X_test)
+    with mlflow.start_run(run_name=run_name):
+        mlflow.log_param("n_estimators", model.n_estimators)
+        mlflow.log_param("random_state", model.random_state)
+        mlflow.log_metric("accuracy", accuracy_score(y_test, y_pred))
+        mlflow.log_metric("precision", precision_score(y_test, y_pred))
+        mlflow.log_metric("recall", recall_score(y_test, y_pred))
+        mlflow.log_metric("f1", f1_score(y_test, y_pred))
+        mlflow.sklearn.log_model(
+            model,
+            name="model",
+            skops_trusted_types=["sklearn.tree._tree.Tree"],
+        )

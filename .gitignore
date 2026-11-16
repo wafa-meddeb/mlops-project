@@ -3,3 +3,4 @@ __pycache__/
 *.joblib
 mlruns/
 .ipynb_checkpoints/
+mlflow.db
